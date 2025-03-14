@@ -9,9 +9,6 @@
 __global__ void compute_acc(float3 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, float* massesGPU, int n_particles){
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= n_particles) return;
-	// accelerationsGPU[i].x = 0.0f;
-	// accelerationsGPU[i].y = 0.0f;
-	// accelerationsGPU[i].z = 0.0f;
 	float3 posi = positionsGPU[i];
 	float3 acc = {0.0f, 0.0f, 0.0f};
 
