@@ -2,14 +2,14 @@
 
 #include "cuda.h"
 #include "kernel.cuh"
-#include <iostream>
+
 #define DIFF_T (0.1f)
 #define EPS (1.0f)
 
-__global__ void compute_acc(float3 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, float* massesGPU, int n_particles){
+__global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, int n_particles){
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= n_particles) return;
-	float3 posi = positionsGPU[i];
+	float4 posi = positionsGPU[i];
 	float3 acc = {0.0f, 0.0f, 0.0f};
 
 	for(int j = 0; j < n_particles; j++){
@@ -19,17 +19,18 @@ __global__ void compute_acc(float3 * positionsGPU, float3 * velocitiesGPU, float
 
 		float dij = diffx * diffx + diffy * diffy + diffz * diffz;
 
-		dij = std::sqrt(fmaxf(dij,1.0f));
+
+		dij = sqrtf(fmaxf(dij,1.0f));
 		dij = 10.0 / (dij * dij * dij);
 
-		acc.x += diffx * dij * massesGPU[j];
-		acc.y += diffy * dij * massesGPU[j];
-		acc.z += diffz * dij * massesGPU[j];
+		acc.x += diffx * dij * positionsGPU[j].w;
+		acc.y += diffy * dij * positionsGPU[j].w;
+		acc.z += diffz * dij * positionsGPU[j].w;
 	}
 	accelerationsGPU[i] = acc;
 }
 
-__global__ void maj_pos(float3 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, int n_particles)
+__global__ void maj_pos(float4 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, int n_particles)
 {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= n_particles) return;
@@ -43,12 +44,12 @@ __global__ void maj_pos(float3 * positionsGPU, float3 * velocitiesGPU, float3 * 
 
 }
 
-void update_position_cu(float3* positionsGPU, float3* velocitiesGPU, float3* accelerationsGPU, float* massesGPU, int n_particles)
+void update_position_cu(float4* positionsGPU, float3* velocitiesGPU, float3* accelerationsGPU, int n_particles)
 {
 	int nthreads = 128;
 	int nblocks =  (n_particles + (nthreads -1)) / nthreads;
 
-	compute_acc<<<nblocks, nthreads>>>(positionsGPU, velocitiesGPU, accelerationsGPU, massesGPU, n_particles);
+	compute_acc<<<nblocks, nthreads>>>(positionsGPU, accelerationsGPU, n_particles);
 	// cudaDeviceSynchronize();
 	maj_pos    <<<nblocks, nthreads>>>(positionsGPU, velocitiesGPU, accelerationsGPU, n_particles);
 }
