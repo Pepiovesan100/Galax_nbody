@@ -97,7 +97,7 @@ void Model_GPU
 	// }
 	// cuda_memcpy(accelerationsGPU,  accelerationsf3.data()     , n_particles * sizeof(float3), cudaMemcpyHostToDevice);
 	update_position_gpu(positionsGPU, velocitiesGPU, accelerationsGPU, n_particles);
-	cuda_memcpy(positionsf3.data(), positionsGPU, n_particles * sizeof(float3), cudaMemcpyDeviceToHost);
+	cuda_memcpy(positionsf3.data(), positionsGPU, n_particles * sizeof(float4), cudaMemcpyDeviceToHost);
 	// cuda_memcpy(velocitiesf3.data(), velocitiesGPU, n_particles * sizeof(float3), cudaMemcpyDeviceToHost);
 	// cuda_memcpy(accelerationsf3.data(), accelerationsGPU, n_particles * sizeof(float3), cudaMemcpyDeviceToHost);
 	for (int i = 0; i < n_particles; i++)

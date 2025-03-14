@@ -12,19 +12,38 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 	float4 posi = positionsGPU[i];
 	float3 acc = {0.0f, 0.0f, 0.0f};
 
-	for(int j = 0; j < n_particles; j++){
-		const float diffx = positionsGPU[j].x - posi.x;
-		const float diffy = positionsGPU[j].y - posi.y;
-		const float diffz = positionsGPU[j].z - posi.z;
+	__shared__ float4 shared_particles[128];
 
-		float dij = diffx * diffx + diffy * diffy + diffz * diffz;
+	for (int j = 0; j < n_particles; j += blockDim.x) {
+        // Load a tile of particles into shared memory
+		int k = j + threadIdx.x;
+        if (k < n_particles) {
+            shared_particles[threadIdx.x] = positionsGPU[k];
+        }else{
+			shared_particles[threadIdx.x] = {0.0f, 0.0f, 0.0f, 0.0f};
+		}
+        __syncthreads(); // Ensure all threads have loaded the tile
 
-		dij = sqrtf(fmaxf(dij,1.0f));
-		dij = 10.0 / (dij * dij * dij);
 
-		acc.x += diffx * dij * positionsGPU[j].w;
-		acc.y += diffy * dij * positionsGPU[j].w;
-		acc.z += diffz * dij * positionsGPU[j].w;
+		for (int l = 0; l < blockDim.x; ++l) {
+            int idx = j + l; // Global index of the particle
+			if (idx >= n_particles) break;
+
+			float4 posj = shared_particles[l];
+			const float diffx = posj.x - posi.x;
+			const float diffy = posj.y - posi.y;
+			const float diffz = posj.z - posi.z;
+
+			float dij = diffx * diffx + diffy * diffy + diffz * diffz;
+
+			dij = std::sqrt(fmaxf(dij,1.0f));
+			dij = 10.0 / (dij * dij * dij);
+
+			acc.x += diffx * dij * posj.w;
+			acc.y += diffy * dij * posj.w;
+			acc.z += diffz * dij * posj.w;
+		}
+		__syncthreads(); // Ensure all threads load the data before computation
 	}
 	accelerationsGPU[i] = acc;
 }
