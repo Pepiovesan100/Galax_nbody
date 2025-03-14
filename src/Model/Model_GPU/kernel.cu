@@ -14,24 +14,18 @@ __global__ void compute_acc(float3 * positionsGPU, float3 * velocitiesGPU, float
 	accelerationsGPU[i].z = 0.0f;
 
 	for(int j = 0; j < n_particles; j++){
-		if(i != j){
-			const float diffx = positionsGPU[j].x - positionsGPU[i].x;
-			const float diffy = positionsGPU[j].y - positionsGPU[i].y;
-			const float diffz = positionsGPU[j].z - positionsGPU[i].z;
+		const float diffx = positionsGPU[j].x - positionsGPU[i].x;
+		const float diffy = positionsGPU[j].y - positionsGPU[i].y;
+		const float diffz = positionsGPU[j].z - positionsGPU[i].z;
 
-			float dij = diffx * diffx + diffy * diffy + diffz * diffz;
+		float dij = diffx * diffx + diffy * diffy + diffz * diffz;
 
-			if (dij < 1.0){
-				dij = 10.0f;
-			} else {
-				dij = std::sqrt(dij);
-				dij = 10.0 / (dij * dij * dij);
-			}
+		dij = std::sqrt(dij);
+		dij = 10.0 / (dij * dij * dij);
 
-			accelerationsGPU[i].x += diffx * dij * massesGPU[j];
-			accelerationsGPU[i].y += diffy * dij * massesGPU[j];
-			accelerationsGPU[i].z += diffz * dij * massesGPU[j];
-		}
+		accelerationsGPU[i].x += diffx * dij * massesGPU[j];
+		accelerationsGPU[i].y += diffy * dij * massesGPU[j];
+		accelerationsGPU[i].z += diffz * dij * massesGPU[j];
 	}
 }
 
