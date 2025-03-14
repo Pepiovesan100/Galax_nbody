@@ -19,7 +19,6 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 
 		float dij = diffx * diffx + diffy * diffy + diffz * diffz;
 
-
 		dij = sqrtf(fmaxf(dij,1.0f));
 		dij = 10.0 / (dij * dij * dij);
 
@@ -50,7 +49,7 @@ void update_position_cu(float4* positionsGPU, float3* velocitiesGPU, float3* acc
 	int nblocks =  (n_particles + (nthreads -1)) / nthreads;
 
 	compute_acc<<<nblocks, nthreads>>>(positionsGPU, accelerationsGPU, n_particles);
-	// cudaDeviceSynchronize();
+	cudaDeviceSynchronize();
 	maj_pos    <<<nblocks, nthreads>>>(positionsGPU, velocitiesGPU, accelerationsGPU, n_particles);
 }
 
