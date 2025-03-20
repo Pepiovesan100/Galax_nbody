@@ -8,29 +8,35 @@
 
 __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, int n_particles){
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-	if (i >= n_particles) return;
-	float4 posi = positionsGPU[i];
+	// if (i >= n_particles)return;
+	float4 posi;
+	if (i >= n_particles){
+		posi = (float4){0.0f, 0.0f, 0.0f, 0.0f};
+	} else {
+		posi = positionsGPU[i];
+	}
+	
 	float3 acc = {0.0f, 0.0f, 0.0f};
 
 	__shared__ float4 shared_particles[128];
 
+
 	for (int j = 0; j < n_particles; j += blockDim.x) {
         // Load a tile of particles into shared memory
 		int k = j + threadIdx.x;
-        if (k < n_particles) {
-            shared_particles[threadIdx.x] = positionsGPU[k];
-        }
-		else{
-			shared_particles[threadIdx.x] = {0.0f, 0.0f, 0.0f, 0.0f};
-		}
+		shared_particles[threadIdx.x] = positionsGPU[k];
+        // if (k < n_particles) {
+        //     shared_particles[threadIdx.x] = positionsGPU[k];
+        // } else {
+		// 	shared_particles[threadIdx.x] = (float4){0.0f,0.0f,0.0f,0.0f};
+		// }
 		
         __syncthreads(); // Ensure all threads have loaded the tile
 
 
 		for (int l = 0; l < blockDim.x; l++) {
             int idx = j + l; // Global index of the particle
-			if (idx >= n_particles) break;
-			if (idx == i) continue;
+			if (idx >= n_particles) continue;
 
 			float4 posj = shared_particles[l];
 			const float diffx = posj.x - posi.x;
@@ -38,21 +44,15 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 			const float diffz = posj.z - posi.z;
 
 			float dij = diffx * diffx + diffy * diffy + diffz * diffz;
-			
-			if(dij < 1.0f){
-				dij = 10.0;
-			} else {
-				dij = std::sqrt(dij);
-				dij = 10.0/(dij * dij *dij);
-			}
 
-			// dij = std::sqrt(fmaxf(dij,1.0f));
-			// dij = 10.0 / (dij * dij * dij);
+			dij = rsqrtf(fmaxf(dij,1.0f));
+			dij = 10.0f * (dij * dij * dij);
 
 			acc.x += diffx * dij * posj.w;
 			acc.y += diffy * dij * posj.w;
 			acc.z += diffz * dij * posj.w;
 		}
+
 		__syncthreads(); // Ensure all threads load the data before computation
 	}
 	accelerationsGPU[i] = acc;
