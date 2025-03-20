@@ -19,8 +19,8 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 
 		float dij = diffx * diffx + diffy * diffy + diffz * diffz;
 
-		dij = std::sqrt(fmaxf(dij,1.0f));
-		dij = 10.0 / (dij * dij * dij);
+		dij = rsqrtf(fmaxf(dij,1.0f));
+		dij = 10.0 * (dij * dij * dij);
 
 		acc.x += diffx * dij * positionsGPU[j].w;
 		acc.y += diffy * dij * positionsGPU[j].w;
