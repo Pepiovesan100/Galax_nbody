@@ -19,15 +19,18 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 		int k = j + threadIdx.x;
         if (k < n_particles) {
             shared_particles[threadIdx.x] = positionsGPU[k];
-        }else{
+        }
+		else{
 			shared_particles[threadIdx.x] = {0.0f, 0.0f, 0.0f, 0.0f};
 		}
+		
         __syncthreads(); // Ensure all threads have loaded the tile
 
 
-		for (int l = 0; l < blockDim.x; ++l) {
+		for (int l = 0; l < blockDim.x; l++) {
             int idx = j + l; // Global index of the particle
 			if (idx >= n_particles) break;
+			if (idx == i) continue;
 
 			float4 posj = shared_particles[l];
 			const float diffx = posj.x - posi.x;
@@ -35,9 +38,16 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 			const float diffz = posj.z - posi.z;
 
 			float dij = diffx * diffx + diffy * diffy + diffz * diffz;
+			
+			if(dij < 1.0f){
+				dij = 10.0;
+			} else {
+				dij = std::sqrt(dij);
+				dij = 10.0/(dij * dij *dij);
+			}
 
-			dij = std::sqrt(fmaxf(dij,1.0f));
-			dij = 10.0 / (dij * dij * dij);
+			// dij = std::sqrt(fmaxf(dij,1.0f));
+			// dij = 10.0 / (dij * dij * dij);
 
 			acc.x += diffx * dij * posj.w;
 			acc.y += diffy * dij * posj.w;
