@@ -20,18 +20,17 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 
 	__shared__ float4 shared_particles[128];
 
-
 	for (int j = 0; j < n_particles; j += blockDim.x) {
-        // Load a tile of particles into shared memory
+		// Load a tile of particles into shared memory
 		int k = j + threadIdx.x;
 		shared_particles[threadIdx.x] = positionsGPU[k];
 		
-        __syncthreads(); // Ensure all threads have loaded the tile
+		__syncthreads(); // Ensure all threads have loaded the tile
 
-
+		
 		for (int l = 0; l < blockDim.x; l++) {
-            int idx = j + l; // Global index of the particle
-			if (idx >= n_particles) continue;
+			int idx = j + l; // Global index of the particle
+			if (idx >= n_particles) break;
 
 			float4 posj = shared_particles[l];
 			const float diffx = posj.x - posi.x;
@@ -49,7 +48,7 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 		}
 
 		__syncthreads(); // Ensure all threads load the data before computation
-	}
+		}
 	accelerationsGPU[i] = acc;
 }
 
