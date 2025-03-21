@@ -3,7 +3,7 @@
 #include "cuda.h"
 #include "kernel.cuh"
 
-#define THD (256)
+#define THD (512)
 
 __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, int n_particles){
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -18,7 +18,7 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 
 	__shared__ float4 shared_particles[THD];
 
-	#pragma unroll 128
+	#pragma unroll 16
 	for (int j = 0; j < n_particles; j += blockDim.x) {
 		// Load a tile of particles into shared memory
 		int k = j + threadIdx.x;
@@ -30,33 +30,32 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 		
 		__syncthreads(); // Ensure all threads have loaded the tile
 
-		#pragma unroll 64
+		#pragma unroll 128
 		for (int l = 0; l < blockDim.x; l++) {
 			int idx = j + l; // Global index of the particle
 			if (idx >= n_particles) break;
 
 			float4 posj = shared_particles[l];
-			const float diffx = posj.x - posi.x;
-			const float diffy = posj.y - posi.y;
-			const float diffz = posj.z - posi.z;
+			float3 diff = (float3){posj.x - posi.x, posj.y - posi.y, posj.z - posi.z};
 
-			float dij = diffx * diffx + diffy * diffy + diffz * diffz;
+			float dij = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
 			
-			// float inv_dij = __frsqrt_rn(fmaxf(dij, 1.0f));
-            // float mul = __fmul_rn(posj.w, __fmul_rn(inv_dij, __fmul_rn(inv_dij, inv_dij))) * 10.0f;
 			dij = rsqrtf(fmaxf(dij,1.0f));
-			dij = 10.0f * (dij * dij * dij);
+			dij = posj.w * (dij * dij * dij);
 
-			float mul = dij * posj.w;
+			// float mul = dij * posj.w;
+			// float mul = __fmul_rn(dij, posj.w);
 
-			acc.x = fmaf(diffx, mul, acc.x);
-			acc.y = fmaf(diffy, mul, acc.y);
-			acc.z = fmaf(diffz, mul, acc.z);
+			acc.x = fmaf(diff.x, dij, acc.x);
+			acc.y = fmaf(diff.y, dij, acc.y);
+			acc.z = fmaf(diff.z, dij, acc.z);
 		}
 
 		__syncthreads(); // Ensure all threads load the data before computation
 		}
-	accelerationsGPU[i] = acc;
+	accelerationsGPU[i].x = acc.x * 10.0f;
+	accelerationsGPU[i].y = acc.y * 10.0f;
+	accelerationsGPU[i].z = acc.z * 10.0f;
 
 }
 
