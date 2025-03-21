@@ -4,9 +4,9 @@
 #include "kernel.cuh"
 
 #define DIFF_T (0.1f)
-#define EPS (1.0f)
+#define THD (1024)
 
-__global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, int n_particles){
+__global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, float3 * velocitiesGPU, int n_particles){
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	// if (i >= n_particles)return;
 	float4 posi;
@@ -18,7 +18,8 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 	
 	float3 acc = {0.0f, 0.0f, 0.0f};
 
-	__shared__ float4 shared_particles[128];
+
+	__shared__ float4 shared_particles[THD];
 
 	for (int j = 0; j < n_particles; j += blockDim.x) {
 		// Load a tile of particles into shared memory
@@ -38,18 +39,26 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 			const float diffz = posj.z - posi.z;
 
 			float dij = diffx * diffx + diffy * diffy + diffz * diffz;
-
+			// float dij = fmaf(diffx, diffx, fmaf(diffy, diffy, diffz*diffz));
+			
 			dij = rsqrtf(fmaxf(dij,1.0f));
 			dij = 10.0f * (dij * dij * dij);
 
-			acc.x += diffx * dij * posj.w;
-			acc.y += diffy * dij * posj.w;
-			acc.z += diffz * dij * posj.w;
+			float mul = dij * posj.w;
+
+			acc.x = fmaf(diffx, mul, acc.x);
+			acc.y = fmaf(diffy, mul, acc.y);
+			acc.z = fmaf(diffz, mul, acc.z);
+
+			// acc.x += diffx * dij * posj.w
+			// acc.y += diffy * dij * posj.w;
+			// acc.z += diffz * dij * posj.w;
 		}
 
 		__syncthreads(); // Ensure all threads load the data before computation
 		}
 	accelerationsGPU[i] = acc;
+
 }
 
 __global__ void maj_pos(float4 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, int n_particles)
@@ -68,10 +77,10 @@ __global__ void maj_pos(float4 * positionsGPU, float3 * velocitiesGPU, float3 * 
 
 void update_position_cu(float4* positionsGPU, float3* velocitiesGPU, float3* accelerationsGPU, int n_particles)
 {
-	int nthreads = 128;
+	int nthreads = THD;
 	int nblocks =  (n_particles + (nthreads -1)) / nthreads;
-
-	compute_acc<<<nblocks, nthreads>>>(positionsGPU, accelerationsGPU, n_particles);
+	
+	compute_acc<<<nblocks, nthreads>>>(positionsGPU, accelerationsGPU, velocitiesGPU, n_particles);
 	cudaDeviceSynchronize();
 	maj_pos    <<<nblocks, nthreads>>>(positionsGPU, velocitiesGPU, accelerationsGPU, n_particles);
 }
