@@ -25,11 +25,6 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
         // Load a tile of particles into shared memory
 		int k = j + threadIdx.x;
 		shared_particles[threadIdx.x] = positionsGPU[k];
-        // if (k < n_particles) {
-        //     shared_particles[threadIdx.x] = positionsGPU[k];
-        // } else {
-		// 	shared_particles[threadIdx.x] = (float4){0.0f,0.0f,0.0f,0.0f};
-		// }
 		
         __syncthreads(); // Ensure all threads have loaded the tile
 
