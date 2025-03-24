@@ -5,14 +5,10 @@
 
 #define THD (512)
 
-__global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, int n_particles){
-	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void compute_acc(float4 * __restrict__ positionsGPU, float3 * __restrict__ accelerationsGPU, int n_particles){
+	unsigned int i = fmaf(blockIdx.x , blockDim.x , threadIdx.x);
 	float4 posi;
-	if (i >= n_particles){
-		posi = (float4){0.0f, 0.0f, 0.0f, 0.0f};
-	} else {
-		posi = positionsGPU[i];
-	}
+	posi = (i < n_particles) ? __ldg(&positionsGPU[i]) : make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 	
 	float3 acc = {0.0f, 0.0f, 0.0f};
 
@@ -22,11 +18,7 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 	for (int j = 0; j < n_particles; j += blockDim.x) {
 		// Load a tile of particles into shared memory
 		int k = j + threadIdx.x;
-		if (k < n_particles) {
-			shared_particles[threadIdx.x] = positionsGPU[k];
-		} else {
-			shared_particles[threadIdx.x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-		}
+		shared_particles[threadIdx.x] = (k < n_particles) ? __ldg(&positionsGPU[k]) : make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		
 		__syncthreads(); // Ensure all threads have loaded the tile
 
@@ -43,9 +35,6 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 			dij = rsqrtf(fmaxf(dij,1.0f));
 			dij = posj.w * (dij * dij * dij);
 
-			// float mul = dij * posj.w;
-			// float mul = __fmul_rn(dij, posj.w);
-
 			acc.x = fmaf(diff.x, dij, acc.x);
 			acc.y = fmaf(diff.y, dij, acc.y);
 			acc.z = fmaf(diff.z, dij, acc.z);
@@ -61,15 +50,25 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 
 __global__ void maj_pos(float4 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, int n_particles)
 {
-	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-	if (i >= n_particles) return;
+	unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	if (idx >= n_particles) return;
+    float3 acc;
+	acc.x = __ldg(&accelerationsGPU[idx].x);
+	acc.y = __ldg(&accelerationsGPU[idx].y);
+	acc.z = __ldg(&accelerationsGPU[idx].z);
+    float3 vel = velocitiesGPU[idx];
+    float4 pos = positionsGPU[idx];
 
-	velocitiesGPU[i].x += accelerationsGPU[i].x * 2.0f;
-	velocitiesGPU[i].y += accelerationsGPU[i].y * 2.0f;
-	velocitiesGPU[i].z += accelerationsGPU[i].z * 2.0f;
-	positionsGPU[i].x += velocitiesGPU[i].x * 0.1f;
-	positionsGPU[i].y += velocitiesGPU[i].y * 0.1f;
-	positionsGPU[i].z += velocitiesGPU[i].z * 0.1f;
+    vel.x += acc.x * 2.0f;
+    vel.y += acc.y * 2.0f;
+    vel.z += acc.z * 2.0f;
+
+    pos.x += vel.x * 0.1f;
+    pos.y += vel.y * 0.1f;
+    pos.z += vel.z * 0.1f;
+
+    velocitiesGPU[idx] = vel;
+    positionsGPU[idx] = pos;
 
 }
 
