@@ -5,6 +5,13 @@
 
 #include <stdio.h>
 
+struct ParticleSoA {
+    float *x;
+    float *y;
+    float *z;
+    float *w; // Weight
+};
+
 void update_position_cu(float4* positionsGPU, float3* velocitiesGPU, float3* accelerationsGPU, int n_particles);
 #endif
 

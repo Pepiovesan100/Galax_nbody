@@ -5,13 +5,22 @@
 
 #define THD (512)
 
-__global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, int n_particles){
+__global__ void compute_acc(ParticleSoA * positionsGPU, float3 * accelerationsGPU, int n_particles){
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-	float4 posi;
+	float posix;
+	float posiy;
+	float posiz;
+	float posiw;
 	if (i >= n_particles){
-		posi = (float4){0.0f, 0.0f, 0.0f, 0.0f};
+		posix = 0.0f;
+		posiy = 0.0f;
+		posiz = 0.0f;
+		posiw = 0.0f;
 	} else {
-		posi = positionsGPU[i];
+		posix = positionsGPU->x[i];
+		posiy = positionsGPU->y[i];
+		posiz = positionsGPU->z[i];
+		posiw = positionsGPU->w[i];
 	}
 	
 	float3 acc = {0.0f, 0.0f, 0.0f};
@@ -23,7 +32,10 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 		// Load a tile of particles into shared memory
 		int k = j + threadIdx.x;
 		if (k < n_particles) {
-			shared_particles[threadIdx.x] = positionsGPU[k];
+			shared_particles[threadIdx.x].x = positionsGPU->x[k];
+			shared_particles[threadIdx.x].y = positionsGPU->y[k];
+			shared_particles[threadIdx.x].z = positionsGPU->z[k];
+			shared_particles[threadIdx.x].w = positionsGPU->w[k];
 		} else {
 			shared_particles[threadIdx.x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		}
@@ -36,7 +48,7 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 			if (idx >= n_particles) break;
 
 			float4 posj = shared_particles[l];
-			float3 diff = (float3){posj.x - posi.x, posj.y - posi.y, posj.z - posi.z};
+			float3 diff = (float3){posj.x - posix, posj.y - posiy, posj.z - posiz};
 
 			float dij = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
 			
@@ -59,7 +71,7 @@ __global__ void compute_acc(float4 * positionsGPU, float3 * accelerationsGPU, in
 
 }
 
-__global__ void maj_pos(float4 * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, int n_particles)
+__global__ void maj_pos(ParticleSoA * positionsGPU, float3 * velocitiesGPU, float3 * accelerationsGPU, int n_particles)
 {
 	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= n_particles) return;
@@ -67,13 +79,13 @@ __global__ void maj_pos(float4 * positionsGPU, float3 * velocitiesGPU, float3 * 
 	velocitiesGPU[i].x += accelerationsGPU[i].x * 2.0f;
 	velocitiesGPU[i].y += accelerationsGPU[i].y * 2.0f;
 	velocitiesGPU[i].z += accelerationsGPU[i].z * 2.0f;
-	positionsGPU[i].x += velocitiesGPU[i].x * 0.1f;
-	positionsGPU[i].y += velocitiesGPU[i].y * 0.1f;
-	positionsGPU[i].z += velocitiesGPU[i].z * 0.1f;
+	positionsGPU->x[i] += velocitiesGPU[i].x * 0.1f;
+	positionsGPU->y[i] += velocitiesGPU[i].y * 0.1f;
+	positionsGPU->z[i] += velocitiesGPU[i].z * 0.1f;
 
 }
 
-void update_position_cu(float4* positionsGPU, float3* velocitiesGPU, float3* accelerationsGPU, int n_particles)
+void update_position_cu(ParticleSoA* positionsGPU, float3* velocitiesGPU, float3* accelerationsGPU, int n_particles)
 {
 	int nthreads = THD;
 	int nblocks =  (n_particles + (nthreads -1)) / nthreads;
